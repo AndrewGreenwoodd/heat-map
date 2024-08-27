@@ -1,20 +1,21 @@
-import express from "express";
-import multer from "multer";
-import unzipper from "unzipper";
-import { createCanvas, loadImage } from "canvas";
-import fs from "fs";
-import path from "path";
+import express from 'express';
+import multer from 'multer';
+import unzipper from 'unzipper';
+import { createCanvas, loadImage } from 'canvas';
+import fs from 'fs';
+import path from 'path';
 
 const app = express();
-const upload = multer({ dest: "uploads/" });
+const upload = multer({ dest: 'uploads/' });
 
 app.post(
-  "/upload",
-  upload.fields([{ name: "map" }, { name: "zip" }]),
+  '/upload',
+  upload.fields([{ name: 'map' }, { name: 'zip' }]),
   async (req, res) => {
     try {
-      const mapFile = req.files?.['map']?.[0];
-      const zipFile = req.files?.['zip']?.[0];
+      const files = req.files as Partial<Record<string, Express.Multer.File[]>>; //because Typescript couldn't infer the types of req.files
+      const mapFile = files['map']?.[0];
+      const zipFile = files['zip']?.[0];
 
       if (!mapFile || !zipFile) {
         return res.status(400).send('Files are missing');

@@ -45,8 +45,11 @@ app.post(
 
       const gridBuffer = await gridFile.buffer();
       const gridData = new Uint8Array(gridBuffer);
-      const CANVAS_WIDTH = 3600; // Downscaled width, because canvas can't proceed too big files, so i have to downscale
-      const CANVAS_HEIGHT = 1800;
+      const ORIGINAL_WIDTH = 36000;
+      const ORIGINAL_HEIGHT = 17999;
+      const SCALE_FACTOR = 0.1; // Scale image down to 10%, because it is too big
+      const CANVAS_WIDTH = Math.round(ORIGINAL_WIDTH * SCALE_FACTOR);
+      const CANVAS_HEIGHT = Math.round(ORIGINAL_HEIGHT * SCALE_FACTOR);
       const canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
       const ctx = canvas.getContext('2d');
       const mapImage = await loadImage(mapPath);
@@ -80,6 +83,7 @@ app.post(
 
       out.on('finish', () => {
         res.sendFile(path.resolve(outputPath));
+        cleanUploadsFolder();
       });
 
       out.on('error', (error) => {
@@ -97,6 +101,20 @@ function getColorForTemperature(temp: number) {
   if (temp < 32) return { r: 0, g: 0, b: 255 }; // Cold
   if (temp < 60) return { r: 0, g: 255, b: 0 }; // Warm
   return { r: 255, g: 0, b: 0 }; // Hot
+}
+
+function cleanUploadsFolder() {
+  //to clear files in uploads folder
+  const directory = 'uploads';
+  fs.readdir(directory, (err, files) => {
+    if (err) throw err;
+
+    for (const file of files) {
+      fs.unlink(path.join(directory, file), (err) => {
+        if (err) throw err;
+      });
+    }
+  });
 }
 
 app.listen(5000, () => {

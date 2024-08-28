@@ -45,15 +45,17 @@ app.post(
 
       const gridBuffer = await gridFile.buffer();
       const gridData = new Uint8Array(gridBuffer);
+
       const ORIGINAL_WIDTH = 36000;
       const ORIGINAL_HEIGHT = 17999;
       const SCALE_FACTOR = 0.1; // Scale image down to 10%, because it is too big
       const CANVAS_WIDTH = Math.round(ORIGINAL_WIDTH * SCALE_FACTOR);
       const CANVAS_HEIGHT = Math.round(ORIGINAL_HEIGHT * SCALE_FACTOR);
+
       const canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
       const ctx = canvas.getContext('2d');
-      const mapImage = await loadImage(mapPath);
 
+      const mapImage = await loadImage(mapPath);
       ctx.drawImage(mapImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       // Color the map based on the grid file data
@@ -62,9 +64,9 @@ app.post(
 
       for (let y = 0; y < CANVAS_HEIGHT; y++) {
         for (let x = 0; x < CANVAS_WIDTH; x++) {
-          const origX = Math.floor((x / CANVAS_WIDTH) * 36000);
-          const origY = Math.floor((y / CANVAS_HEIGHT) * 17999);
-          const temp = gridData[origY * 36000 + origX];
+          const origX = Math.floor(x / SCALE_FACTOR);
+          const origY = Math.floor(y / SCALE_FACTOR);
+          const temp = gridData[origY * ORIGINAL_WIDTH + origX];
           const color = getColorForTemperature(temp);
           const index = (y * CANVAS_WIDTH + x) * 4;
           data[index] = color.r;

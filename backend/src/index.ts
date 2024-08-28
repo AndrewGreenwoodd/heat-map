@@ -4,9 +4,18 @@ import unzipper from 'unzipper';
 import { createCanvas, loadImage } from 'canvas';
 import fs from 'fs';
 import path from 'path';
+import cors from 'cors';
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
+
+app.use(
+  cors({
+    origin: 'http://localhost:5173',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type'],
+  }),
+);
 
 app.post(
   '/upload',
@@ -36,22 +45,25 @@ app.post(
 
       const gridBuffer = await gridFile.buffer();
       const gridData = new Uint8Array(gridBuffer);
-
-      const canvas = createCanvas(36000, 17999);
+      const CANVAS_WIDTH = 3600; // Downscaled width, because canvas can't proceed too big files, so i have to downscale
+      const CANVAS_HEIGHT = 1800;
+      const canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
       const ctx = canvas.getContext('2d');
       const mapImage = await loadImage(mapPath);
 
-      ctx.drawImage(mapImage, 0, 0, 36000, 17999);
+      ctx.drawImage(mapImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       // Color the map based on the grid file data
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
 
-      for (let y = 0; y < 17999; y++) {
-        for (let x = 0; x < 36000; x++) {
-          const temp = gridData[y * 36000 + x];
+      for (let y = 0; y < CANVAS_HEIGHT; y++) {
+        for (let x = 0; x < CANVAS_WIDTH; x++) {
+          const origX = Math.floor((x / CANVAS_WIDTH) * 36000);
+          const origY = Math.floor((y / CANVAS_HEIGHT) * 17999);
+          const temp = gridData[origY * 36000 + origX];
           const color = getColorForTemperature(temp);
-          const index = (y * 36000 + x) * 4;
+          const index = (y * CANVAS_WIDTH + x) * 4;
           data[index] = color.r;
           data[index + 1] = color.g;
           data[index + 2] = color.b;

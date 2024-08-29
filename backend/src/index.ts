@@ -46,16 +46,24 @@ app.post(
       const gridBuffer = await gridFile.buffer();
       const gridData = new Uint8Array(gridBuffer);
 
+      let minTemp = Infinity;
+      let maxTemp = -Infinity;
+
+      for (let i = 0; i < gridData.length; i++) {
+        const temp = gridData[i];
+        if (temp < minTemp) minTemp = temp;
+        if (temp > maxTemp) maxTemp = temp;
+      }
+
       const ORIGINAL_WIDTH = 36000;
       const ORIGINAL_HEIGHT = 17999;
-      const SCALE_FACTOR = 0.1; // Scale image down to 10%, because it is too big
+      const SCALE_FACTOR = 0.5; // Scale image down to 10%, because it is too big
       const CANVAS_WIDTH = Math.round(ORIGINAL_WIDTH * SCALE_FACTOR);
       const CANVAS_HEIGHT = Math.round(ORIGINAL_HEIGHT * SCALE_FACTOR);
-
       const canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
       const ctx = canvas.getContext('2d');
-
       const mapImage = await loadImage(mapPath);
+
       ctx.drawImage(mapImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
       // Color the map based on the grid file data
@@ -67,7 +75,7 @@ app.post(
           const origX = Math.floor(x / SCALE_FACTOR);
           const origY = Math.floor(y / SCALE_FACTOR);
           const temp = gridData[origY * ORIGINAL_WIDTH + origX];
-          const color = getColorForTemperature(temp);
+          const color = getColorForTemperature(temp, minTemp, maxTemp);
           const index = (y * CANVAS_WIDTH + x) * 4;
           data[index] = color.r;
           data[index + 1] = color.g;
@@ -78,14 +86,24 @@ app.post(
 
       ctx.putImageData(imageData, 0, 0);
 
-      const outputPath = path.join('uploads', 'output.png');
+      const outputDir = path.join(__dirname, 'uploads');
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+      const outputPath = path.join(outputDir, 'output.png');
       const out = fs.createWriteStream(outputPath);
       const stream = canvas.createPNGStream();
       stream.pipe(out);
 
       out.on('finish', () => {
-        res.sendFile(path.resolve(outputPath));
-        cleanUploadsFolder();
+        res.sendFile(outputPath, (err) => {
+          if (err) {
+            console.error('Error sending file:', err);
+            res.status(500).send('Error sending output image');
+          } else {
+            cleanUploadsFolder(); //I did this logic, because file got deleted before sent often
+          }
+        });
       });
 
       out.on('error', (error) => {
@@ -99,10 +117,16 @@ app.post(
   },
 );
 
-function getColorForTemperature(temp: number) {
-  if (temp < 32) return { r: 0, g: 0, b: 255 }; // Cold
-  if (temp < 60) return { r: 0, g: 255, b: 0 }; // Warm
-  return { r: 255, g: 0, b: 0 }; // Hot
+function getColorForTemperature(
+  temp: number,
+  minTemp: number,
+  maxTemp: number,
+) {
+  const ratio = (temp - minTemp) / (maxTemp - minTemp);
+  const r = Math.floor(255 * ratio); // From blue to red
+  const g = Math.floor(255 * (1 - ratio)); // From blue to red
+  const b = Math.floor(255 * (1 - ratio)); // From blue to red
+  return { r, g, b };
 }
 
 function cleanUploadsFolder() {

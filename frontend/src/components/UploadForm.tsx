@@ -5,22 +5,39 @@ const UploadForm: React.FC = () => {
   const [mapFile, setMapFile] = useState<File | null>(null);
   const [zipFile, setZipFile] = useState<File | null>(null);
   const [mapUrl, setMapUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mapFile && zipFile) {
+      setLoading(true);
+      setError(null);
+
       const formData = new FormData();
       formData.append('map', mapFile);
       formData.append('zip', zipFile);
 
-      const response = await fetch('http://localhost:5000/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      try {
+        const response = await fetch('http://localhost:5000/upload', {
+          method: 'POST',
+          body: formData,
+        });
 
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      setMapUrl(url);
+        if (!response.ok) {
+          throw new Error('Failed to upload files');
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        setMapUrl(url);
+      } catch (error) {
+        setError((error as Error).message);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setError('Please select both files before uploading.');
     }
   };
 
@@ -53,6 +70,8 @@ const UploadForm: React.FC = () => {
           </button>
         </form>
       )}
+      {loading && <div className={styles.spinner}></div>}{' '}
+      {error && <div className={styles.error}>{error}</div>}{' '}
     </div>
   );
 };

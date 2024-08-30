@@ -68,9 +68,15 @@ const UploadForm: React.FC = () => {
           <button type="submit" className={styles.formBtn}>
             Upload
           </button>
+          {loading && (
+            <div>
+              {' '}
+              <p>Generating image</p>
+              <div className={styles.spinner}></div>
+            </div>
+          )}{' '}
         </form>
       )}
-      {loading && <div className={styles.spinner}></div>}{' '}
       {error && <div className={styles.error}>{error}</div>}{' '}
     </div>
   );

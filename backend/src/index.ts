@@ -33,7 +33,6 @@ app.post(
       const mapPath = mapFile.path;
       const zipPath = zipFile.path;
 
-      // Unzipping the zip archive
       const directory = await unzipper.Open.file(zipPath);
       const gridFile = directory.files.find((file) =>
         file.path.endsWith('.grid'),
@@ -44,7 +43,17 @@ app.post(
       }
 
       const gridBuffer = await gridFile.buffer();
-      const gridData = new Uint8Array(gridBuffer);
+
+      const headerOffset = 128;
+      const gridDataBuffer = gridBuffer.slice(headerOffset);
+
+      const gridData = new Int16Array(
+        gridDataBuffer.buffer,
+        gridDataBuffer.byteOffset,
+        gridDataBuffer.byteLength / Int16Array.BYTES_PER_ELEMENT,
+      );
+
+      console.log('First few grid data values:', gridData.slice(0, 10));
 
       let minTemp = Infinity;
       let maxTemp = -Infinity;
@@ -55,32 +64,35 @@ app.post(
         if (temp > maxTemp) maxTemp = temp;
       }
 
-      const ORIGINAL_WIDTH = 36000;
-      const ORIGINAL_HEIGHT = 17999;
-      const SCALE_FACTOR = 0.5; // Scale image down to 10%, because it is too big
-      const CANVAS_WIDTH = Math.round(ORIGINAL_WIDTH * SCALE_FACTOR);
-      const CANVAS_HEIGHT = Math.round(ORIGINAL_HEIGHT * SCALE_FACTOR);
-      const canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
-      const ctx = canvas.getContext('2d');
       const mapImage = await loadImage(mapPath);
 
-      ctx.drawImage(mapImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      const canvas = createCanvas(mapImage.width, mapImage.height);
+      const ctx = canvas.getContext('2d');
 
-      // Color the map based on the grid file data
+      ctx.drawImage(mapImage, 0, 0);
+
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
 
-      for (let y = 0; y < CANVAS_HEIGHT; y++) {
-        for (let x = 0; x < CANVAS_WIDTH; x++) {
-          const origX = Math.floor(x / SCALE_FACTOR);
-          const origY = Math.floor(y / SCALE_FACTOR);
-          const temp = gridData[origY * ORIGINAL_WIDTH + origX];
-          const color = getColorForTemperature(temp, minTemp, maxTemp);
-          const index = (y * CANVAS_WIDTH + x) * 4;
-          data[index] = color.r;
-          data[index + 1] = color.g;
-          data[index + 2] = color.b;
-          data[index + 3] = 255;
+      for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < canvas.width; x++) {
+          const index = (y * canvas.width + x) * 4;
+          const tempIndex = y * canvas.width + x;
+
+          if (tempIndex < gridData.length) {
+            const temp = gridData[tempIndex];
+            const color = getColorForTemperature(temp, minTemp, maxTemp);
+
+            const isWater =
+              data[index + 2] > data[index] &&
+              data[index + 2] > data[index + 1];
+
+            if (isWater) {
+              data[index] = color.r;
+              data[index + 1] = color.g;
+              data[index + 2] = color.b;
+            }
+          }
         }
       }
 
@@ -90,6 +102,7 @@ app.post(
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
+
       const outputPath = path.join(outputDir, 'output.png');
       const out = fs.createWriteStream(outputPath);
       const stream = canvas.createPNGStream();
@@ -122,15 +135,19 @@ function getColorForTemperature(
   minTemp: number,
   maxTemp: number,
 ) {
+  if (temp === -999 || isNaN(temp)) {
+    return { r: 0, g: 0, b: 0 };
+  }
+
   const ratio = (temp - minTemp) / (maxTemp - minTemp);
-  const r = Math.floor(255 * ratio); // From blue to red
-  const g = Math.floor(255 * (1 - ratio)); // From blue to red
-  const b = Math.floor(255 * (1 - ratio)); // From blue to red
+  const r = Math.floor(255 * Math.min(1, ratio * 2));
+  const g = Math.floor(255 * (1 - Math.abs(ratio - 0.5) * 2));
+  const b = Math.floor(255 * Math.min(1, (1 - ratio) * 2));
+
   return { r, g, b };
 }
 
 function cleanUploadsFolder() {
-  //to clear files in uploads folder
   const directory = 'uploads';
   fs.readdir(directory, (err, files) => {
     if (err) throw err;
